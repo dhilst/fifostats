@@ -48,7 +48,6 @@ typedef struct {
 	const char *path;
 	unsigned int delay;
 	/* private members */
-	bool      _stop;
 	pthread_t _id;
 } fifostats;
 
@@ -57,7 +56,7 @@ static void *fifo_task(void *arg)
 	int fd;
 	fifostats *f = arg;
 
-        while (!f->_stop) {
+        while (true) {
                 fd = open(f->path, O_WRONLY); /* Should block here, until
                                                  * other end is open too */
                 if (fd < 0) {
@@ -80,9 +79,10 @@ static void *fifo_task(void *arg)
 static inline int fifostats_init(fifostats *f)
 {
         struct stat s;
+	pthread_attr_t attr;
 
-	assert(f->cb);
-	assert(f->path);
+        assert(f->cb);
+        assert(f->path);
 
         if (!(stat(f->path, &s))) { /* File exists */
                 if ((s.st_mode & S_IFMT) != S_IFIFO) {
@@ -96,14 +96,15 @@ static inline int fifostats_init(fifostats *f)
                 }
         }
 
+	pthread_attr_init(&attr);
+	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
         pthread_create(&f->_id, NULL, fifo_task, f);
+	pthread_attr_destroy(&attr);
         return 0;
 }
 
 static inline void fifostats_destroy(fifostats *f)
 {
-	f->_stop = true;
-	pthread_join(f->_id, NULL);
 	unlink(f->path);
 }
 
